@@ -1,0 +1,21 @@
+{
+  "economy": {
+    "wine_price": { "STARFRUIT": 2250, "ANCIENT_FRUIT": 1650 },
+    "fruit_price": { "STARFRUIT": 750, "ANCIENT_FRUIT": 550 },
+    "seed_cost": { "STARFRUIT": 400, "ANCIENT_FRUIT": 0 },
+    "fertilizer_cost": { "deluxe_speed_gro": 150 },
+    "aged_wine_multiplier": 2.0,
+    "wine_quality_multiplier": 1.0,
+    "fruit_quality_multiplier": 1.0,
+    "cask_full_batch_required": true,
+    "casks_with_walkways": 0
+  },
+  "growth": { "fertilizer": "deluxe_speed_gro" },
+  "bees": {
+    "flower_base_price": 0,
+    "seasons": ["spring", "summer", "fall"]
+  },
+  "starting_inventory": {
+    "base_wine": { "STARFRUIT": 189, "ANCIENT_FRUIT": 0 }
+  }
+}

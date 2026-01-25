@@ -1,0 +1,152 @@
+{
+  "kegs": 104,
+  "casks": 194,
+  "preserves_jars": 20,
+  "dehydrators": 4,
+  "oil_makers": 10,
+  "mayo_machines": 0,
+  "cheese_presses": 0,
+  "looms": 0,
+  "crop": "both",
+
+  "growth": {
+    "fertilizer": "deluxe_speed_gro"
+  },
+
+  "simulation": {},
+  "economy": {
+    "wine_price": {
+      "STARFRUIT": 2250,
+      "ANCIENT_FRUIT": 1650,
+      "APPLE": 300,
+      "APRICOT": 150,
+      "CHERRY": 240,
+      "ORANGE": 300,
+      "PEACH": 420,
+      "POMEGRANATE": 420,
+      "BANANA": 450,
+      "MANGO": 390
+    },
+    "fruit_price": {
+      "STARFRUIT": 750,
+      "ANCIENT_FRUIT": 550,
+      "APPLE": 100,
+      "APRICOT": 50,
+      "CHERRY": 80,
+      "ORANGE": 100,
+      "PEACH": 140,
+      "POMEGRANATE": 140,
+      "BANANA": 150,
+      "MANGO": 130
+    },
+    "seed_cost": { "STARFRUIT": 400, "ANCIENT_FRUIT": 0 },
+    "fertilizer_cost": { "deluxe_speed_gro": 150 },
+    "aged_wine_multiplier": 2.0,
+    "wine_quality_multiplier": 1.0,
+    "fruit_quality_multiplier": 1.0,
+    "cask_full_batch_required": true,
+    "casks_with_walkways": 0
+  },
+  "professions": {
+    "farming": {
+      "rancher": false,
+      "tiller": false,
+      "coopmaster": false,
+      "shepherd": false,
+      "artisan": true,
+      "agriculturist": false
+    },
+    "foraging": {
+      "forester": false,
+      "gatherer": false,
+      "lumberjack": false,
+      "tapper": false,
+      "botanist": false,
+      "tracker": false
+    },
+    "fishing": {
+      "fisher": false,
+      "trapper": false,
+      "angler": false,
+      "pirate": false,
+      "mariner": false,
+      "luremaster": false
+    },
+    "mining": {
+      "miner": false,
+      "geologist": false,
+      "blacksmith": false,
+      "prospector": false,
+      "excavator": false,
+      "gemologist": false
+    },
+    "combat": {
+      "fighter": false,
+      "scout": false,
+      "brute": false,
+      "defender": false,
+      "acrobat": false,
+      "desperado": false
+    }
+  },
+  "starting_inventory": {
+    "fruit": { "STARFRUIT": 0, "ANCIENT_FRUIT": 0 },
+    "base_wine": { "STARFRUIT": 194, "ANCIENT_FRUIT": 0 }
+  },
+  "animals": {
+    "coops": [
+      { "name": "coop1", "chickens": 5, "ducks": 7, "rabbits": 0, "void_chickens": 0 },
+      { "name": "coop2", "chickens": 6, "ducks": 6, "rabbits": 0, "void_chickens": 0 }
+    ],
+    "barns": [
+      { "name": "barn1", "cows": 0, "goats": 0, "pigs": 12, "sheep": 0 }
+    ],
+    "large_egg_rate": 0.5,
+    "large_milk_rate": 0.5,
+    "large_goat_milk_rate": 0.5,
+    "rabbit_foot_rate": 0.1
+  },
+  "bees": {
+    "bee_houses": 25,
+    "flower_base_price": 0,
+    "seasons": ["spring", "summer", "fall"],
+    "flower_plan": {
+      "spring": {
+        "fast": { "name": "Tulip", "growth_days": 6, "base_price": 30 },
+        "expensive": { "name": "Blue Jazz", "growth_days": 7, "base_price": 50 }
+      },
+      "summer": {
+        "fast": { "name": "Poppy", "growth_days": 7, "base_price": 140 },
+        "expensive": { "name": "Poppy", "growth_days": 7, "base_price": 140 }
+      },
+      "fall": {
+        "fast": { "name": "Sunflower", "growth_days": 8, "base_price": 80 },
+        "expensive": { "name": "Fairy Rose", "growth_days": 12, "base_price": 290 }
+      }
+    }
+  },
+  "fruit_trees": {
+    "greenhouse": {
+      "CHERRY": 1,
+      "APPLE": 1
+    },
+    "outdoors": {
+      "APRICOT": 2,
+      "ORANGE": 2,
+      "PEACH": 2,
+      "POMEGRANATE": 1
+    }
+  },
+
+  "plots": [
+    { "name": "greenhouse",
+    "tiles": {
+      "ANCIENT_FRUIT": 4
+    }, "calendar": { "type": "always" } },
+
+    { "name": "outdoors_starfruit",
+    "tiles": {
+      "STARFRUIT": 320
+    }, "calendar": { "type": "seasons", "seasons": ["summer"] } }
+  ]
+}

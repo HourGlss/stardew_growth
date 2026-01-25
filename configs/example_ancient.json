@@ -1,0 +1,74 @@
+{
+  "kegs": 194,
+  "casks": 194,
+  "crop": "ancient",
+  "growth": {
+    "fertilizer": "none"
+  },
+  "simulation": {},
+  "economy": {
+    "wine_price": { "ANCIENT_FRUIT": 0 },
+    "fruit_price": { "ANCIENT_FRUIT": 0 },
+    "seed_cost": { "ANCIENT_FRUIT": 0 },
+    "fertilizer_cost": { "none": 0 },
+    "aged_wine_multiplier": 2.0,
+    "wine_quality_multiplier": 1.0,
+    "fruit_quality_multiplier": 1.0,
+    "cask_full_batch_required": true,
+    "casks_with_walkways": 0
+  },
+  "professions": {
+    "farming": {
+      "rancher": false,
+      "tiller": false,
+      "coopmaster": false,
+      "shepherd": false,
+      "artisan": true,
+      "agriculturist": false
+    },
+    "foraging": {
+      "forester": false,
+      "gatherer": false,
+      "lumberjack": false,
+      "tapper": false,
+      "botanist": false,
+      "tracker": false
+    },
+    "fishing": {
+      "fisher": false,
+      "trapper": false,
+      "angler": false,
+      "pirate": false,
+      "mariner": false,
+      "luremaster": false
+    },
+    "mining": {
+      "miner": false,
+      "geologist": false,
+      "blacksmith": false,
+      "prospector": false,
+      "excavator": false,
+      "gemologist": false
+    },
+    "combat": {
+      "fighter": false,
+      "scout": false,
+      "brute": false,
+      "defender": false,
+      "acrobat": false,
+      "desperado": false
+    }
+  },
+  "starting_inventory": {
+    "fruit": { "ANCIENT_FRUIT": 0 },
+    "base_wine": { "ANCIENT_FRUIT": 0 }
+  },
+  "fruit_trees": {
+    "greenhouse": {},
+    "outdoors": {},
+    "always": {}
+  },
+  "plots": [
+    { "name": "greenhouse", "tiles": { "ANCIENT_FRUIT": 120 }, "calendar": { "type": "always" } }
+  ]
+}

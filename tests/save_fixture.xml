@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="utf-8"?>
+<SaveGame xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <player>
+    <professions>
+      <int>1</int>
+      <int>4</int>
+      <int>13</int>
+      <int>16</int>
+    </professions>
+  </player>
+  <locations>
+    <GameLocation>
+      <name>Farm</name>
+      <buildings>
+        <Building>
+          <buildingType>Deluxe Coop</buildingType>
+          <indoors>
+            <name>Deluxe Coop</name>
+            <animals>
+              <item><key><long>1</long></key><value><FarmAnimal><type>White Chicken</type></FarmAnimal></value></item>
+              <item><key><long>2</long></key><value><FarmAnimal><type>Duck</type></FarmAnimal></value></item>
+              <item><key><long>6</long></key><value><FarmAnimal><type>Void Chicken</type></FarmAnimal></value></item>
+              <item><key><long>7</long></key><value><FarmAnimal><type>Rabbit</type></FarmAnimal></value></item>
+            </animals>
+          </indoors>
+        </Building>
+        <Building>
+          <buildingType>Deluxe Barn</buildingType>
+          <indoors>
+            <name>Deluxe Barn</name>
+            <animals>
+              <item><key><long>3</long></key><value><FarmAnimal><type>Brown Cow</type></FarmAnimal></value></item>
+              <item><key><long>4</long></key><value><FarmAnimal><type>Goat</type></FarmAnimal></value></item>
+              <item><key><long>5</long></key><value><FarmAnimal><type>Pig</type></FarmAnimal></value></item>
+              <item><key><long>8</long></key><value><FarmAnimal><type>Sheep</type></FarmAnimal></value></item>
+            </animals>
+          </indoors>
+        </Building>
+      </buildings>
+      <objects>
+        <item>
+          <key><Vector2><X>1</X><Y>1</Y></Vector2></key>
+          <value><Object><name>Bee House</name></Object></value>
+        </item>
+      </objects>
+      <terrainFeatures>
+        <item>
+          <key><Vector2><X>5</X><Y>5</Y></Vector2></key>
+          <value>
+            <TerrainFeature xsi:type="FruitTree">
+              <growthStage>4</growthStage>
+              <treeId>628</treeId>
+              <daysUntilMature>-1</daysUntilMature>
+              <fruitsOnTree>0</fruitsOnTree>
+              <struckByLightningCountdown>0</struckByLightningCountdown>
+              <health>10</health>
+              <flipped>false</flipped>
+              <stump>false</stump>
+              <greenHouseTileTree>false</greenHouseTileTree>
+              <growthRate>1</growthRate>
+            </TerrainFeature>
+          </value>
+        </item>
+      </terrainFeatures>
+    </GameLocation>
+    <GameLocation>
+      <name>Greenhouse</name>
+      <terrainFeatures>
+        <item>
+          <key><Vector2><X>0</X><Y>0</Y></Vector2></key>
+          <value>
+            <TerrainFeature xsi:type="HoeDirt">
+              <fertilizer>(O)466</fertilizer>
+              <crop>
+                <indexOfHarvest>268</indexOfHarvest>
+              </crop>
+            </TerrainFeature>
+          </value>
+        </item>
+        <item>
+          <key><Vector2><X>1</X><Y>0</Y></Vector2></key>
+          <value>
+            <TerrainFeature xsi:type="HoeDirt">
+              <fertilizer>(O)465</fertilizer>
+              <crop>
+                <indexOfHarvest>454</indexOfHarvest>
+              </crop>
+            </TerrainFeature>
+          </value>
+        </item>
+        <item>
+          <key><Vector2><X>2</X><Y>0</Y></Vector2></key>
+          <value>
+            <TerrainFeature xsi:type="FruitTree">
+              <growthStage>4</growthStage>
+              <treeId>633</treeId>
+              <daysUntilMature>-5</daysUntilMature>
+              <fruitsOnTree>0</fruitsOnTree>
+              <struckByLightningCountdown>0</struckByLightningCountdown>
+              <health>10</health>
+              <flipped>false</flipped>
+              <stump>false</stump>
+              <greenHouseTileTree>true</greenHouseTileTree>
+              <growthRate>1</growthRate>
+            </TerrainFeature>
+          </value>
+        </item>
+      </terrainFeatures>
+    </GameLocation>
+    <GameLocation>
+      <name>Cellar</name>
+      <objects>
+        <item><key><Vector2><X>0</X><Y>0</Y></Vector2></key><value><Object><name>Cask</name><parentSheetIndex>163</parentSheetIndex></Object></value></item>
+        <item><key><Vector2><X>1</X><Y>0</Y></Vector2></key><value><Object><name>Cask</name><parentSheetIndex>163</parentSheetIndex></Object></value></item>
+      </objects>
+    </GameLocation>
+    <GameLocation>
+      <name>Cellar2</name>
+      <objects>
+        <item><key><Vector2><X>0</X><Y>0</Y></Vector2></key><value><Object><name>Cask</name><parentSheetIndex>163</parentSheetIndex></Object></value></item>
+      </objects>
+    </GameLocation>
+    <GameLocation>
+      <name>Big Shed</name>
+      <objects>
+        <item><key><Vector2><X>2</X><Y>2</Y></Vector2></key><value><Object><name>Oil Maker</name><parentSheetIndex>19</parentSheetIndex></Object></value></item>
+        <item><key><Vector2><X>3</X><Y>2</Y></Vector2></key><value><Object><name>Keg</name></Object></value></item>
+        <item><key><Vector2><X>4</X><Y>2</Y></Vector2></key><value><Object><name>Preserves Jar</name></Object></value></item>
+        <item><key><Vector2><X>5</X><Y>2</Y></Vector2></key><value><Object><name>Mayonnaise Machine</name></Object></value></item>
+        <item><key><Vector2><X>6</X><Y>2</Y></Vector2></key><value><Object><name>Cheese Press</name></Object></value></item>
+        <item><key><Vector2><X>7</X><Y>2</Y></Vector2></key><value><Object><name>Loom</name></Object></value></item>
+      </objects>
+    </GameLocation>
+  </locations>
+</SaveGame>
