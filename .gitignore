@@ -2,3 +2,6 @@
 /.pytest_cache
 /.vscode
 /stardew_wine_sim.egg-info
+/sim/__pycache__/
+/tests/__pycache__/
+/saved_game
