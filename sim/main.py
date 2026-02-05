@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import sys
-from sim.save_loader import load_config
+import json
+from pathlib import Path
+
+from sim.save_loader import load_config, is_save_file
 from sim.crops import STARFRUIT, ANCIENT_FRUIT
 from sim.animals import simulate_animals
 from sim.bees import simulate_bees
@@ -10,6 +13,10 @@ from sim.pipeline import simulate_year_multi_crop
 from sim.plots import Plot, PlotCalendar
 from sim.economy import compute_animal_profit, compute_honey_profit, compute_profit, per_fruit_processing_values, wine_price_for_crop
 from sim.fruit_trees import build_daily_fruit, summarize_tree_counts, total_tree_counts, tree_ids_from_config
+from sim.crop_catalog import DataError, load_crop_catalog
+from sim.save_state import parse_save_state
+from sim.save_simulator import SimulationOptions, simulate_save
+from sim.config import EconomyConfig
 
 
 def main() -> int:
@@ -21,6 +28,76 @@ def main() -> int:
 
     config_path = sys.argv[1]
     overrides_path = sys.argv[2] if len(sys.argv) == 3 else None
+    if is_save_file(config_path):
+        try:
+            catalog = load_crop_catalog()
+        except DataError as exc:
+            print(str(exc))
+            return 1
+        farm = parse_save_state(config_path, catalog)
+        overrides_raw = {}
+        if overrides_path is not None:
+            overrides_raw = json.loads(Path(overrides_path).read_text(encoding="utf-8"))
+
+        economy_raw = overrides_raw.get("economy", {})
+        economy = EconomyConfig(
+            aged_wine_multiplier=float(economy_raw.get("aged_wine_multiplier", 2.0)),
+            wine_quality_multiplier=float(economy_raw.get("wine_quality_multiplier", 1.0)),
+            fruit_quality_multiplier=float(economy_raw.get("fruit_quality_multiplier", 1.0)),
+            artisan=farm.professions.farming.artisan,
+            tiller=farm.professions.farming.tiller,
+        )
+
+        sim_raw = overrides_raw.get("save_simulation", {})
+        options = SimulationOptions(
+            window_days=int(sim_raw.get("window_days", 113)),
+            sprinkler_only=bool(sim_raw.get("sprinkler_only", True)),
+            allow_seed_purchases=bool(sim_raw.get("allow_seed_purchases", True)),
+            replant_strategy=str(sim_raw.get("replant_strategy", "optimal")),
+            ancient_seed_conservative=bool(sim_raw.get("ancient_seed_conservative", True)),
+        )
+
+        result = simulate_save(farm, catalog, economy, options)
+        watered_tiles = sum(1 for tile in farm.tiles if tile.watered)
+        print(
+            f"start={farm.season.capitalize()} {farm.day_of_month} year={farm.year} "
+            f"window_days={options.window_days} sprinkler_only={options.sprinkler_only}"
+        )
+        print(
+            f"tiles={len(farm.tiles)} watered_tiles={watered_tiles} "
+            f"kegs={farm.machines.kegs} jars={farm.machines.preserves_jars} "
+            f"dehydrators={farm.machines.dehydrators} casks={farm.machines.casks} "
+            f"seed_makers={farm.machines.seed_makers}"
+        )
+        print(
+            f"professions: artisan={farm.professions.farming.artisan} tiller={farm.professions.farming.tiller} "
+            f"agriculturist={farm.professions.farming.agriculturist}"
+        )
+
+        for crop_id, crop_result in sorted(result.per_crop.items(), key=lambda item: item[0]):
+            crop = catalog.by_harvest_id.get(crop_id)
+            name = crop.name if crop and crop.name else crop_id
+            print(f"\n{name}:")
+            print(f"  harvested={crop_result.harvested} raw_sold={crop_result.raw_sold}")
+            print(
+                f"  base_wine={crop_result.base_wine} aged_wine={crop_result.aged_wine} "
+                f"juice={crop_result.juice} jelly={crop_result.jelly} pickles={crop_result.pickles} "
+                f"dried={crop_result.dried}"
+            )
+            print(
+                f"  seed_used={crop_result.seed_used} seed_purchased={crop_result.seed_purchased} "
+                f"seed_cost={crop_result.seed_cost}"
+            )
+            print(
+                f"  in_kegs_end={crop_result.wine_in_kegs_end} in_casks_end={crop_result.wine_in_casks_end} "
+                f"in_jars_end={crop_result.jelly_in_jars_end} in_dehydrators_end={crop_result.dried_in_dehydrators_end}"
+            )
+
+        print(f"\ntotal_revenue={result.total_revenue}")
+        print(f"total_seed_cost={result.total_seed_cost}")
+        print(f"TOTAL PROFIT={result.total_profit}")
+        return 0
+
     cfg = load_config(config_path, overrides_path)
     mods = GrowthModifiers(
         fertilizer=cfg.growth.fertilizer,

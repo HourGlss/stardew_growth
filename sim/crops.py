@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal
 
-CropId = Literal["ancient", "starfruit"]
+CropId = str
 
 
 @dataclass(frozen=True)

@@ -5,10 +5,30 @@ TLDR (setup + run)
    `python -m sim.main path/to/SaveGame.xml [overrides.json]`
 2) If you don't have a save file, use a full JSON config:
    `python -m sim.main path/to/config.json`
-3) Save files populate your real farm counts (machines, animals, professions, greenhouse crops).
-   JSON is only used for fields not present in the save (economy/prices, flower plans, etc).
-4) Each run simulates exactly one Stardew year (112 days) starting on Spring 1,
-   and reports production, keg sufficiency, cask usage, and profit.
+3) Save files run a rolling 113-day sim from the in-save date using only existing tiles + sprinkler coverage.
+4) Full JSON configs still run the legacy 112-day year starting Spring 1 (useful for what-if graphs).
+
+---
+
+## Save-based simulation (rolling 113 days)
+
+What it does:
+- Uses the in-save date as day 0 and simulates 113 days forward.
+- Only uses existing HoeDirt tiles from the save; no new tilling or machines assumed.
+- Sprinkler-only by default; tiles outside sprinkler coverage are ignored.
+- Replants using available seeds (inventory + shop purchases), with conservative Ancient Fruit seed-maker output.
+- Processing is capacity-aware across kegs, jars, dehydrators, and casks.
+
+Data requirements:
+- `data/Crops.json` and `data/Objects.json` from the game (Objects is required for names, categories, and base prices).
+- `data/wiki_crops.json` for seed prices and shop availability, generated from the Stardew Valley Wiki.
+- Optional: set `SIM_OBJECTS_PATH` to point at your `Objects.json` if you don’t want to copy it into `data/`.
+In this repo, `data/Objects.json` is tracked; replace it if you want a different game version or language.
+
+To refresh wiki seed data:
+```
+python scripts/build_wiki_crops.py
+```
 
 ---
 
@@ -16,6 +36,7 @@ TLDR (setup + run)
 
 The graph app generates multiple 3D surfaces + a pie chart so you can see
 what changes move you toward 10M/year.
+It uses the legacy year-based simulator (112 days from Spring 1), not the rolling save-based sim.
 
 Run with a save file (preferred):
 ```
@@ -35,8 +56,11 @@ Outputs (when you pass `output.png`):
 
 Important notes:
 - If the save has no outdoor crop plots, the graph app derives outdoor tiles
-  from **stored Quality/Iridium Sprinklers** (8 tiles per Quality, 24 per Iridium)
+  from **placed + stored Quality/Iridium Sprinklers** (8 tiles per Quality, 24 per Iridium)
   and assumes a 50/50 starfruit/ancient split for the base mix when `crop` is `"both"`.
+- When you pass a save file, the graph app applies conservative build limits for kegs/casks
+  based on available Oak Resin and Hardwood (plus current tappers on oak trees).
+  You can override or disable these limits via `graph_limits` (see below).
 - To control the exact outdoor mix or seasons, run the graph with a full JSON
   config instead of a save file (see `configs/example.json`).
 - Each 3D chart annotates the max (x,y,z) value in a text box.
@@ -46,18 +70,47 @@ Important notes:
 
 ---
 
+## Ancient seed app
+
+This tool estimates how quickly you can accumulate Ancient Seeds if **every**
+Ancient Fruit you harvest goes straight into seed makers.
+
+Run with a save file (only argument required):
+```
+python -m sim.ancient_seed_app saved_game/YourSave.xml
+```
+
+Optional output path:
+```
+python -m sim.ancient_seed_app saved_game/YourSave.xml ancient_seed_timeline.png
+```
+
+What it prints:
+- The current in-game date from your save.
+- Counts of Ancient Fruit plants in greenhouse vs outdoors vs always-on locations.
+- A timeline showing the **days until** you reach 10/20/30/50/100/150/200/250/300/350/400 seeds.
+
+What it graphs:
+- A line chart of seed accumulation for **min**, **average**, and **max** seed-maker luck.
+
+Assumptions:
+- Seed maker output for Ancient Fruit is 1–3 seeds per fruit (average 2).
+- Ancient Fruit regrows every 7 days; outdoor plants only produce in spring/summer/fall.
+- Greenhouse (and Island) Ancient Fruit produce year-round.
+- Seed maker processing time is ignored (all fruit is processed the same day).
+
+---
+
 ## Config vs overrides (how to use the JSONs well)
 
 Use **one** of these approaches:
 
 1) **Save file + overrides (recommended):**
-   - Save file supplies: machine counts, animals, professions, greenhouse crops,
-     fruit trees, and outdoor crop tiles (if planted).
-   - `overrides.json` supplies: prices, fertilizer cost, flower plans, starting inventory,
-     and any assumptions not stored in the save.
+   - Save file supplies: machine counts, professions, seed inventory, and current tilled tiles.
+   - `overrides.json` supplies: economy multipliers and rolling-sim options (see below).
    - Example: `python -m sim.main saved_game/YourSave.xml configs/overrides.json`
 
-2) **Full JSON config (no save file):**
+2) **Full JSON config (legacy year sim):**
    - `config.json` supplies everything (machines, plots, crops, professions, prices, etc).
    - Example: `python -m sim.main configs/example.json`
 
@@ -65,7 +118,60 @@ If you don’t want the save file to dictate your outdoor layout, use a full JSO
 
 ---
 
+## Save overrides reference (overrides.json)
+
+Save-mode overrides use two top-level keys:
+- `economy`: optional multipliers.
+- `save_simulation`: rolling sim controls.
+
+`economy` fields used by the save sim:
+- `aged_wine_multiplier` (float, default `2.0`)
+- `wine_quality_multiplier` (float, default `1.0`)
+- `fruit_quality_multiplier` (float, default `1.0`)
+
+`save_simulation` fields:
+- `window_days` (int, default `113`)
+- `sprinkler_only` (bool, default `true`)
+- `allow_seed_purchases` (bool, default `true`)
+- `replant_strategy` (string, default `"optimal"`)
+- `ancient_seed_conservative` (bool, default `true`)
+
+`graph_limits` fields (save file + graph app only):
+- `enabled` (bool, default `true` when a save is used)
+- `max_total_kegs` / `max_new_kegs`
+- `max_total_casks` / `max_new_casks`
+- `max_total_jars` / `max_new_jars`
+- `max_total_dehydrators` / `max_new_dehydrators`
+- `max_total_bee_houses` / `max_new_bee_houses`
+- `max_outdoor_tiles` / `max_new_outdoor_tiles`
+
+Example:
+```
+{
+  "economy": {
+    "aged_wine_multiplier": 2.0,
+    "wine_quality_multiplier": 1.0,
+    "fruit_quality_multiplier": 1.0
+  },
+  "save_simulation": {
+    "window_days": 113,
+    "sprinkler_only": true,
+    "allow_seed_purchases": true,
+    "ancient_seed_conservative": true
+  },
+  "graph_limits": {
+    "enabled": true,
+    "max_new_kegs": 20,
+    "max_new_casks": 10
+  }
+}
+```
+
+---
+
 ## JSON config reference (config.json)
+
+This section applies to the legacy year-based simulator (used by `config.json` runs and the graph app).
 
 Top-level fields (JSON config):
 - `kegs` (int): number of kegs you have.
@@ -88,7 +194,7 @@ Top-level fields (JSON config):
 - `growth` (object): fertilizer + paddy bonus.
 - `simulation` (object): run length and starting day-of-year.
 
-Save file inputs:
+Legacy save-file import (config/graph runs):
 - When you pass a save XML, the simulator derives machine counts, animals, bee houses,
   professions, greenhouse crop tiles, and fruit trees from the save (placed objects only; chests ignored).
 - Casks are counted from the main `Cellar` only (extra cellars like `Cellar2..8` are ignored).
@@ -96,7 +202,7 @@ Save file inputs:
 - Oil Makers are matched by name (`Oil Maker`) and by IDs `19` and `108017` in the save.
 - Outdoor tiles are only included if the save contains outdoor **starfruit** or **ancient fruit**
   tiles; otherwise outdoor plots are omitted.
-- For graphing, if no outdoor plots exist in the save, the graph app counts **stored**
+- For graphing, if no outdoor plots exist in the save, the graph app counts **placed + stored**
   Quality/Iridium Sprinklers and converts them into outdoor tile capacity.
 - Fruit trees are read from `terrainFeatures` FruitTree entries (mature, non-stump only).
   Greenhouse and Island trees produce year-round; Farm trees follow seasonal fruit rules.
@@ -229,11 +335,11 @@ From the repo root:
 python -m sim.main configs/example.json
 ```
 
-From a save file (preferred when available):
+From a save file (rolling 113-day sim):
 ```
 python -m sim.main saved_game/YourSave.xml configs/overrides.json
 ```
-Example overrides file: `configs/overrides_example.json`
+Note: save mode requires `data/Objects.json` (or set `SIM_OBJECTS_PATH`).
 
 You can point to any JSON file:
 ```
@@ -254,6 +360,14 @@ It also prints suggested focus points for reaching 10M.
 ---
 
 ## What the output means
+
+Save-based sim output (rolling 113 days):
+- `start=... year=... window_days=...`: the in-save date and rolling window length.
+- `tiles=... watered_tiles=...`: tilled tiles found in the save and how many are sprinkler-watered.
+- Per-crop blocks report harvested totals, processed outputs, seed usage, and machines still running at the end.
+- `total_revenue`, `total_seed_cost`, `TOTAL PROFIT`: rolling-window totals.
+
+Legacy year-sim output (config runs + graph app):
 
 The header line echoes your setup:
 ```
@@ -320,6 +434,8 @@ Animal and honey revenues are added on top of crop revenues (animal/bait costs a
 ---
 
 ## Example configs (194 casks)
+
+These examples target the legacy year-based simulator (graph app + config.json runs).
 
 Note: With full-batch casks enabled, you need `casks` base wine ready on
 Spring 1 and Fall 1, or set `casks_with_walkways` to a smaller layout.
@@ -541,27 +657,40 @@ These are optional heuristics reflected in the simulator outputs:
 
 ## File map (what each file does)
 
-- `sim/main.py`: CLI entry point. Loads JSON config and prints per-plot results.
+- `sim/main.py`: CLI entry point. Runs save-based rolling sims or legacy config sims.
 - `sim/graph_app.py`: 3D profit graph tool (kegs vs outdoor tiles).
+- `sim/ancient_seed_app.py`: Ancient seed timeline tool (save file only).
 - `sim/config.py`: Config parsing and dataclasses, including season/day and per-crop tiles.
 - `sim/crops.py`: Crop definitions (starfruit, ancient fruit) and base phase lengths.
 - `sim/growth.py`: Growth speed math and phase-day reductions for fertilizer/profession.
 - `sim/pipeline.py`: Core simulation of fruit → kegs → wine + calendar-aware plot simulations.
+- `sim/save_simulator.py`: Rolling save-based simulation with replanting + processing.
+- `sim/save_state.py`: Parses save files into farm state tiles, crops, machines, and inventory.
+- `sim/crop_catalog.py`: Loads crop/seed metadata from game data + wiki seed prices.
+- `sim/pricing.py`: Raw and processed price formulas for save-based sim.
 - `sim/economy.py`: Profit calculations from production totals.
 - `sim/animals.py`: Animal production simulation (eggs/milk → mayo/cheese).
 - `sim/bees.py`: Bee house honey production simulation.
 - `sim/fruit_trees.py`: Fruit tree parsing + daily fruit output builder.
+- `sim/ancient_seeds.py`: Ancient seed parsing + timeline simulation logic.
 - `sim/save_loader.py`: Save-game XML parsing + JSON override merging.
 - `sim/plots.py`: Plot calendars, per-crop tile helpers, and day-of-year helpers.
+- `scripts/build_wiki_crops.py`: Pulls seed prices and sources from the Stardew Valley Wiki.
+- `data/wiki_crops.json`: Generated seed price/source data (used by save sim).
 - `configs/example.json`: Example configuration.
 - `configs/example_starfruit.json`: Example A config (starfruit, summer).
 - `configs/example_ancient.json`: Example B config (ancient, greenhouse).
-- `configs/overrides_example.json`: Minimal overrides for save files (economy + growth).
+- `configs/overrides_example.json`: Legacy overrides for config/graph runs (economy + growth).
 - `tests/test_growth.py`: Growth-stage reduction tests.
 - `tests/test_pipeline.py`: Pipeline timing tests (including calendar handling).
 - `tests/test_config.py`: Config parsing tests.
 - `tests/test_plots.py`: Plot/calendar helper tests.
 - `tests/test_economy.py`: Profit calculation tests.
 - `tests/test_main.py`: CLI smoke test.
+- `tests/test_ancient_seeds.py`: Ancient seed timeline tests.
+- `tests/test_pricing.py`: Save-sim price formula tests.
+- `tests/test_crop_catalog.py`: Crop catalog + seed availability tests.
+- `tests/test_save_state.py`: Save parsing tests.
+- `tests/test_save_simulator.py`: Rolling save sim tests.
 - `tests/conftest.py`: Adds repo root to `sys.path` so tests can import `sim`.
 - `pyproject.toml`: Project metadata and test configuration.

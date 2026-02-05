@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import sys
+import json
 from copy import deepcopy
-from dataclasses import replace
+from dataclasses import dataclass, replace
+from pathlib import Path
 from typing import Iterable
+import xml.etree.ElementTree as ET
+import re
 
 import matplotlib.pyplot as plt
 from matplotlib import cm, colors, colormaps
 import numpy as np
 
-from sim.save_loader import load_config, is_save_file, sprinkler_tiles_from_storage
+from sim.save_loader import load_config, is_save_file, sprinkler_tiles_from_save
 from sim.animals import simulate_animals
 from sim.bees import simulate_bees
 from sim.crops import ANCIENT_FRUIT, STARFRUIT
@@ -33,6 +37,256 @@ def _range_from_base(base: int, step: int, min_value: int, extra: int, min_end: 
     start = max(min_value, base - (step * 2))
     end = max(base + extra, min_end)
     return _iter_range(start, end, step)
+
+
+@dataclass(frozen=True)
+class GraphLimits:
+    max_total_kegs: int | None = None
+    max_total_casks: int | None = None
+    max_total_jars: int | None = None
+    max_total_dehydrators: int | None = None
+    max_total_bee_houses: int | None = None
+    max_outdoor_tiles: int | None = None
+
+
+def _limit_from_raw(raw: dict, base: int, total_key: str, new_key: str) -> int | None:
+    if total_key in raw:
+        return int(raw[total_key])
+    if new_key in raw:
+        return int(base + int(raw[new_key]))
+    return None
+
+
+def _parse_graph_limits(raw: dict, cfg: AppConfig) -> GraphLimits:
+    return GraphLimits(
+        max_total_kegs=_limit_from_raw(raw, cfg.kegs, "max_total_kegs", "max_new_kegs"),
+        max_total_casks=_limit_from_raw(raw, cfg.casks, "max_total_casks", "max_new_casks"),
+        max_total_jars=_limit_from_raw(raw, cfg.preserves_jars, "max_total_jars", "max_new_jars"),
+        max_total_dehydrators=_limit_from_raw(raw, cfg.dehydrators, "max_total_dehydrators", "max_new_dehydrators"),
+        max_total_bee_houses=_limit_from_raw(raw, cfg.bees.bee_houses, "max_total_bee_houses", "max_new_bee_houses"),
+        max_outdoor_tiles=_limit_from_raw(raw, 0, "max_outdoor_tiles", "max_new_outdoor_tiles"),
+    )
+
+
+def _merge_limits(base: GraphLimits, override: GraphLimits) -> GraphLimits:
+    return GraphLimits(
+        max_total_kegs=override.max_total_kegs if override.max_total_kegs is not None else base.max_total_kegs,
+        max_total_casks=override.max_total_casks if override.max_total_casks is not None else base.max_total_casks,
+        max_total_jars=override.max_total_jars if override.max_total_jars is not None else base.max_total_jars,
+        max_total_dehydrators=(
+            override.max_total_dehydrators if override.max_total_dehydrators is not None else base.max_total_dehydrators
+        ),
+        max_total_bee_houses=(
+            override.max_total_bee_houses if override.max_total_bee_houses is not None else base.max_total_bee_houses
+        ),
+        max_outdoor_tiles=override.max_outdoor_tiles if override.max_outdoor_tiles is not None else base.max_outdoor_tiles,
+    )
+
+
+def _apply_limit(values: list[int], base: int, max_total: int | None) -> list[int]:
+    if max_total is None:
+        return values
+    limit = max(int(max_total), int(base))
+    limited = [value for value in values if value <= limit]
+    if base not in limited:
+        limited.append(int(base))
+    limited = sorted(set(limited))
+    return limited or [int(base)]
+
+
+def _extract_numeric_id(raw: str | None) -> str | None:
+    if not raw:
+        return None
+    match = re.search(r"(\d+)", raw)
+    if not match:
+        return None
+    return match.group(1)
+
+
+def _iter_locations(root: ET.Element) -> list[tuple[str, ET.Element]]:
+    locations: list[tuple[str, ET.Element]] = []
+    for loc in root.findall("locations/GameLocation"):
+        name = loc.findtext("name") or "(unknown)"
+        locations.append((name, loc))
+    farm = root.find("locations/GameLocation[name='Farm']")
+    if farm is None:
+        return locations
+    buildings = farm.find("buildings")
+    if buildings is None:
+        return locations
+    for b in buildings:
+        indoors = b.find("indoors")
+        if indoors is None:
+            continue
+        in_name = indoors.findtext("name") or b.findtext("buildingType") or "(indoor)"
+        locations.append((in_name, indoors))
+    return locations
+
+
+def _iter_items(root: ET.Element) -> Iterable[ET.Element]:
+    player = root.find("player")
+    if player is not None:
+        items = player.find("items")
+        if items is not None:
+            for item in items.findall("Item"):
+                if item.attrib.get("{http://www.w3.org/2001/XMLSchema-instance}nil") == "true":
+                    continue
+                yield item
+    for _, loc in _iter_locations(root):
+        objects = loc.find("objects")
+        if objects is None:
+            continue
+        for item in objects.findall("item"):
+            value = item.find("value")
+            if value is None:
+                continue
+            obj = value.find("Object")
+            if obj is None:
+                continue
+            items_node = obj.find("items")
+            if items_node is None:
+                continue
+            for child in items_node.findall("Item"):
+                if child.attrib.get("{http://www.w3.org/2001/XMLSchema-instance}nil") == "true":
+                    continue
+                item_node = child.find("Object") or child
+                yield item_node
+
+
+def _count_inventory_item(root: ET.Element, item_id: str) -> int:
+    total = 0
+    for item in _iter_items(root):
+        raw_id = item.findtext("itemId") or item.findtext("parentSheetIndex")
+        numeric = _extract_numeric_id(raw_id)
+        if numeric != item_id:
+            continue
+        try:
+            stack = int(item.findtext("stack") or 1)
+        except ValueError:
+            stack = 1
+        total += max(0, stack)
+    return total
+
+
+def _load_tree_tap_days() -> dict[str, tuple[str, int]]:
+    path = Path(__file__).resolve().parents[1] / "data" / "WildTrees.json"
+    try:
+        raw = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    tap_info: dict[str, tuple[str, int]] = {}
+    for tree_id, entry in raw.items():
+        tap_items = entry.get("TapItems") or []
+        for tap in tap_items:
+            item_id = _extract_numeric_id(tap.get("ItemId") or tap.get("Id"))
+            days = tap.get("DaysUntilReady")
+            if item_id and days:
+                tap_info[str(tree_id)] = (item_id, int(days))
+                break
+    return tap_info
+
+
+def _estimate_graph_limits_from_save(save_path: str, cfg: AppConfig) -> GraphLimits:
+    try:
+        root = ET.fromstring(Path(save_path).read_text(encoding="utf-8"))
+    except Exception:
+        return GraphLimits()
+
+    tap_info = _load_tree_tap_days()
+    trees: dict[tuple[str, int, int], str] = {}
+    for loc_name, loc in _iter_locations(root):
+        terrain = loc.find("terrainFeatures")
+        if terrain is None:
+            continue
+        for item in terrain.findall("item"):
+            key = item.find("key/Vector2")
+            if key is None:
+                continue
+            x_text = key.findtext("X")
+            y_text = key.findtext("Y")
+            if x_text is None or y_text is None:
+                continue
+            x = int(float(x_text))
+            y = int(float(y_text))
+            tf = item.find("value/TerrainFeature")
+            if tf is None:
+                continue
+            tf_type = tf.attrib.get("{http://www.w3.org/2001/XMLSchema-instance}type")
+            if tf_type != "Tree":
+                continue
+            tree_type = tf.findtext("treeType")
+            if tree_type is None:
+                continue
+            trees[(loc_name, x, y)] = tree_type
+
+    oak_tappers = 0
+    oak_tap_days = None
+    for loc_name, loc in _iter_locations(root):
+        objects = loc.find("objects")
+        if objects is None:
+            continue
+        for item in objects.findall("item"):
+            key = item.find("key/Vector2")
+            obj = item.find("value/Object")
+            if key is None or obj is None:
+                continue
+            name = (obj.findtext("name") or "").strip()
+            if name not in ("Tapper", "Heavy Tapper"):
+                continue
+            x_text = key.findtext("X")
+            y_text = key.findtext("Y")
+            if x_text is None or y_text is None:
+                continue
+            x = int(float(x_text))
+            y = int(float(y_text))
+            tree_type = trees.get((loc_name, x, y))
+            if not tree_type:
+                continue
+            tap_item, tap_days = tap_info.get(str(tree_type), (None, None))
+            if tap_item != "725":
+                continue
+            oak_tappers += 1
+            oak_tap_days = tap_days
+
+    resin_inventory = _count_inventory_item(root, "725")
+    hardwood_inventory = _count_inventory_item(root, "709")
+    resin_production = 0
+    if oak_tappers > 0 and oak_tap_days and oak_tap_days > 0:
+        resin_production = oak_tappers * (cfg.simulation.max_days // oak_tap_days)
+
+    max_kegs = cfg.kegs + resin_inventory + resin_production
+    max_casks = cfg.casks + hardwood_inventory
+
+    return GraphLimits(
+        max_total_kegs=max_kegs,
+        max_total_casks=max_casks,
+    )
+
+
+def _load_graph_limits(
+    config_path: str,
+    overrides_path: str | None,
+    cfg: AppConfig,
+) -> GraphLimits | None:
+    override_limits = None
+    if overrides_path is not None:
+        raw = json.loads(Path(overrides_path).read_text(encoding="utf-8"))
+        limits_raw = raw.get("graph_limits")
+        if isinstance(limits_raw, dict):
+            if limits_raw.get("enabled", True) is False:
+                return None
+            override_limits = _parse_graph_limits(limits_raw, cfg)
+
+    if is_save_file(config_path):
+        base_limits = _estimate_graph_limits_from_save(config_path, cfg)
+    else:
+        base_limits = GraphLimits()
+
+    if override_limits is not None:
+        return _merge_limits(base_limits, override_limits)
+    if any(value is not None for value in base_limits.__dict__.values()):
+        return base_limits
+    return None
 
 
 def _parse_args(argv: list[str]) -> tuple[str, str | None, str, int]:
@@ -432,6 +686,23 @@ def main() -> int:
         return 2
 
     cfg = load_config(config_path, overrides_path)
+    graph_limits = _load_graph_limits(config_path, overrides_path, cfg)
+    if graph_limits is not None:
+        notes = []
+        if graph_limits.max_total_kegs is not None:
+            notes.append(f"kegs<= {graph_limits.max_total_kegs}")
+        if graph_limits.max_total_casks is not None:
+            notes.append(f"casks<= {graph_limits.max_total_casks}")
+        if graph_limits.max_total_jars is not None:
+            notes.append(f"jars<= {graph_limits.max_total_jars}")
+        if graph_limits.max_total_dehydrators is not None:
+            notes.append(f"dehydrators<= {graph_limits.max_total_dehydrators}")
+        if graph_limits.max_total_bee_houses is not None:
+            notes.append(f"bee_houses<= {graph_limits.max_total_bee_houses}")
+        if graph_limits.max_outdoor_tiles is not None:
+            notes.append(f"outdoor_tiles<= {graph_limits.max_outdoor_tiles}")
+        if notes:
+            print("note: graph limits enabled (" + ", ".join(notes) + ")")
     plots = list(cfg.plots)
     if not plots:
         print("Error: config must define plots.")
@@ -439,13 +710,16 @@ def main() -> int:
 
     outdoor_plots = _outdoor_plots(plots)
     if not outdoor_plots and is_save_file(config_path):
-        sprinkler_tiles, sprinkler_counts = sprinkler_tiles_from_storage(config_path)
+        sprinkler_tiles, sprinkler_counts = sprinkler_tiles_from_save(config_path)
         if sprinkler_tiles > 0:
             plots = _add_sprinkler_outdoor_plots(cfg, plots, sprinkler_tiles)
             outdoor_plots = _outdoor_plots(plots)
             print(
-                "note: no outdoor plots in save; derived outdoor tiles from storage sprinklers "
-                f"(quality={sprinkler_counts['quality']}, iridium={sprinkler_counts['iridium']}, "
+                "note: no outdoor plots in save; derived outdoor tiles from sprinklers "
+                f"(placed_quality={sprinkler_counts['placed_quality']}, "
+                f"placed_iridium={sprinkler_counts['placed_iridium']}, "
+                f"storage_quality={sprinkler_counts['storage_quality']}, "
+                f"storage_iridium={sprinkler_counts['storage_iridium']}, "
                 f"tiles={sprinkler_tiles})"
             )
             if cfg.crop == "both":
@@ -474,7 +748,12 @@ def main() -> int:
     print(f"target profit: {target_profit:,}\n")
 
     kegs_values = _range_from_base(cfg.kegs, step=10, min_value=0, extra=400, min_end=400)
-    tiles_values = _iter_range(0, outdoor_base_total + 600, 10)
+    if graph_limits is not None:
+        kegs_values = _apply_limit(kegs_values, cfg.kegs, graph_limits.max_total_kegs)
+    tiles_max = outdoor_base_total + 600
+    if graph_limits is not None and graph_limits.max_outdoor_tiles is not None:
+        tiles_max = min(tiles_max, graph_limits.max_outdoor_tiles)
+    tiles_values = _iter_range(0, tiles_max, 10)
 
     outdoor_names = {plot.name.strip().lower() for plot in outdoor_plots}
     scenarios = [
@@ -509,15 +788,30 @@ def main() -> int:
         ),
     ]
 
+    jar_values = _range_from_base(cfg.preserves_jars, 10, 0, 200, 200)
+    dehydrator_values = _range_from_base(cfg.dehydrators, 5, 0, 60, 60)
+    bee_values = _range_from_base(cfg.bees.bee_houses, 10, 0, 200, 200)
+    cask_values = _range_from_base(cfg.casks, 10, 0, 200, 200)
+    if graph_limits is not None:
+        jar_values = _apply_limit(jar_values, cfg.preserves_jars, graph_limits.max_total_jars)
+        dehydrator_values = _apply_limit(dehydrator_values, cfg.dehydrators, graph_limits.max_total_dehydrators)
+        bee_values = _apply_limit(bee_values, cfg.bees.bee_houses, graph_limits.max_total_bee_houses)
+        cask_values = _apply_limit(cask_values, cfg.casks, graph_limits.max_total_casks)
+
     expansion_specs = [
-        ("Kegs vs Preserves Jars", "Kegs", "Preserves Jars", kegs_values, _range_from_base(cfg.preserves_jars, 10, 0, 200, 200), "jars"),
-        ("Kegs vs Dehydrators", "Kegs", "Dehydrators", kegs_values, _range_from_base(cfg.dehydrators, 5, 0, 60, 60), "dehydrators"),
-        ("Kegs vs Bee Houses", "Kegs", "Bee Houses", kegs_values, _range_from_base(cfg.bees.bee_houses, 10, 0, 200, 200), "bees"),
-        ("Kegs vs Casks", "Kegs", "Casks", kegs_values, _range_from_base(cfg.casks, 10, 0, 200, 200), "casks"),
+        ("Kegs vs Preserves Jars", "Kegs", "Preserves Jars", kegs_values, jar_values, "jars"),
+        ("Kegs vs Dehydrators", "Kegs", "Dehydrators", kegs_values, dehydrator_values, "dehydrators"),
+        ("Kegs vs Bee Houses", "Kegs", "Bee Houses", kegs_values, bee_values, "bees"),
+        ("Kegs vs Casks", "Kegs", "Casks", kegs_values, cask_values, "casks"),
     ]
 
     prof_kegs = _range_from_base(cfg.kegs, step=20, min_value=0, extra=200, min_end=200)
-    prof_tiles = _iter_range(0, outdoor_base_total + 400, 20)
+    if graph_limits is not None:
+        prof_kegs = _apply_limit(prof_kegs, cfg.kegs, graph_limits.max_total_kegs)
+    prof_tiles_max = outdoor_base_total + 400
+    if graph_limits is not None and graph_limits.max_outdoor_tiles is not None:
+        prof_tiles_max = min(prof_tiles_max, graph_limits.max_outdoor_tiles)
+    prof_tiles = _iter_range(0, prof_tiles_max, 20)
 
     total_points = 0
     total_points += len(kegs_values) * len(tiles_values) * len(scenarios)

@@ -36,7 +36,7 @@ def _phase_override(crop: CropSpec, mods: GrowthModifiers) -> tuple[int, ...] | 
     """Return a phase override tuple for known wiki calendar edge cases."""
     # Match the Stardew Wiki calendar row for Ancient Fruit at 20% (Speed-Gro + Agriculturist).
     if (
-        crop.crop_id == "ancient"
+        str(crop.crop_id).lower() in ("ancient", "ancientfruit", "ancient_fruit", "454")
         and crop.phase_days == (2, 7, 7, 7, 5)
         and mods.fertilizer == "speed_gro"
         and mods.agriculturist
@@ -90,3 +90,9 @@ def apply_speed_increases_to_phase_days(
 def days_to_first_harvest(crop: CropSpec, mods: GrowthModifiers) -> int:
     """Return total days to first harvest after applying speed modifiers."""
     return sum(apply_speed_increases_to_phase_days(crop, mods))
+
+
+def days_to_first_harvest_from_phases(phase_days: tuple[int, ...], mods: GrowthModifiers, crop_id: str = "") -> int:
+    """Return total days to first harvest from raw phase days and modifiers."""
+    spec = CropSpec(crop_id=crop_id, phase_days=tuple(phase_days), regrow_days=None)
+    return days_to_first_harvest(spec, mods)

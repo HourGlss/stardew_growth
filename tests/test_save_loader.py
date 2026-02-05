@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from sim.save_loader import load_config, sprinkler_tiles_from_storage
+from sim.save_loader import load_config, sprinkler_tiles_from_storage, sprinkler_tiles_from_save
 
 
 def test_load_config_from_save_uses_cellar_only(tmp_path):
@@ -201,3 +201,65 @@ def test_sprinkler_tiles_from_storage(tmp_path):
     assert counts["quality"] == 2
     assert counts["iridium"] == 1
     assert tiles == (2 * 8) + (1 * 24)
+
+
+def test_sprinkler_tiles_from_save_placed_and_storage(tmp_path):
+    save_path = tmp_path / "sprinklers_save.xml"
+    save_path.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<SaveGame xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <locations>
+    <GameLocation>
+      <name>Farm</name>
+      <objects>
+        <item>
+          <key><Vector2><X>0</X><Y>0</Y></Vector2></key>
+          <value>
+            <Object>
+              <name>Quality Sprinkler</name>
+              <parentSheetIndex>621</parentSheetIndex>
+              <itemId>621</itemId>
+            </Object>
+          </value>
+        </item>
+        <item>
+          <key><Vector2><X>1</X><Y>0</Y></Vector2></key>
+          <value>
+            <Object>
+              <name>Iridium Sprinkler</name>
+              <parentSheetIndex>645</parentSheetIndex>
+              <itemId>645</itemId>
+            </Object>
+          </value>
+        </item>
+        <item>
+          <key><Vector2><X>2</X><Y>0</Y></Vector2></key>
+          <value>
+            <Object>
+              <name>Chest</name>
+              <items>
+                <Item xsi:type="Object">
+                  <name>Quality Sprinkler</name>
+                  <parentSheetIndex>621</parentSheetIndex>
+                  <itemId>621</itemId>
+                  <stack>3</stack>
+                </Item>
+              </items>
+            </Object>
+          </value>
+        </item>
+      </objects>
+    </GameLocation>
+  </locations>
+</SaveGame>
+""",
+        encoding="utf-8",
+    )
+    tiles, counts = sprinkler_tiles_from_save(save_path)
+    assert counts["placed_quality"] == 1
+    assert counts["placed_iridium"] == 1
+    assert counts["storage_quality"] == 3
+    assert counts["storage_iridium"] == 0
+    assert counts["quality"] == 4
+    assert counts["iridium"] == 1
+    assert tiles == (4 * 8) + (1 * 24)

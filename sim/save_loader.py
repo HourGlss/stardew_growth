@@ -123,6 +123,24 @@ def sprinkler_tiles_from_storage(path: str | Path) -> tuple[int, dict[str, int]]
     return tiles, counts
 
 
+def sprinkler_tiles_from_save(path: str | Path) -> tuple[int, dict[str, int]]:
+    """Return (tiles, counts) using placed + stored sprinklers."""
+    root = ET.fromstring(Path(path).read_text(encoding="utf-8"))
+    placed = _count_sprinklers_placed(root)
+    storage = _count_sprinklers_in_storage(root)
+    total_quality = placed["quality"] + storage["quality"]
+    total_iridium = placed["iridium"] + storage["iridium"]
+    tiles = (total_quality * _QUALITY_SPRINKLER_TILES) + (total_iridium * _IRIDIUM_SPRINKLER_TILES)
+    return tiles, {
+        "quality": total_quality,
+        "iridium": total_iridium,
+        "placed_quality": placed["quality"],
+        "placed_iridium": placed["iridium"],
+        "storage_quality": storage["quality"],
+        "storage_iridium": storage["iridium"],
+    }
+
+
 def _load_from_save(path: str | Path, overrides_path: str | Path | None) -> AppConfig:
     root = ET.fromstring(Path(path).read_text(encoding="utf-8"))
 
@@ -437,6 +455,32 @@ def _count_sprinklers_in_storage(root: ET.Element) -> dict[str, int]:
                     counts["quality"] += stack
                 elif _is_iridium_sprinkler(name, parent_sheet, item_id):
                     counts["iridium"] += stack
+    return counts
+
+
+def _count_sprinklers_placed(root: ET.Element) -> dict[str, int]:
+    """Count sprinklers placed on the Farm (outdoors)."""
+    counts = {"quality": 0, "iridium": 0}
+    farm = _find_location(root, "Farm")
+    if farm is None:
+        return counts
+    objects = farm.find("objects")
+    if objects is None:
+        return counts
+    for item in objects.findall("item"):
+        value = item.find("value")
+        if value is None:
+            continue
+        obj = value.find("Object")
+        if obj is None:
+            continue
+        name = (obj.findtext("name") or "").strip()
+        parent_sheet = (obj.findtext("parentSheetIndex") or "").strip()
+        item_id = (obj.findtext("itemId") or "").strip()
+        if _is_quality_sprinkler(name, parent_sheet, item_id):
+            counts["quality"] += 1
+        elif _is_iridium_sprinkler(name, parent_sheet, item_id):
+            counts["iridium"] += 1
     return counts
 
 
